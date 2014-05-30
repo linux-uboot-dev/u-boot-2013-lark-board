@@ -97,6 +97,7 @@
  */
 #define CONFIG_PRELOADER_SKIP_SDRAM		(0)
 
+/* just      */
 
 #endif /* _PRELOADER_BUILD_H_ */
 
