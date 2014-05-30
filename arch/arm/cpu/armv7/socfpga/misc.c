@@ -85,7 +85,11 @@ int misc_init_r(void)
 	/* fpga2sdram port */
 	setenv_addr("fpga2sdram", (void *)(SOCFPGA_SDR_ADDRESS +
 		SDR_CTRLGRP_FPGAPORTRST_ADDRESS));
+#ifndef CONFIG_LARK_BOARD
 	sprintf(buf, "0x%08x", readl(ISWGRP_HANDOFF_FPGA2SDR));
+#else
+	sprintf(buf, "0x%08x", 0x111);
+#endif
 	setenv("fpga2sdram_handoff", buf);
 	setenv_addr("fpga2sdram_apply", (void *)sdram_applycfg_uboot);
 
