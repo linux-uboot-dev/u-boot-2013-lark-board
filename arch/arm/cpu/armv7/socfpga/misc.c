@@ -85,32 +85,30 @@ int misc_init_r(void)
 	/* fpga2sdram port */
 	setenv_addr("fpga2sdram", (void *)(SOCFPGA_SDR_ADDRESS +
 		SDR_CTRLGRP_FPGAPORTRST_ADDRESS));
-#ifndef CONFIG_LARK_BOARD
-	sprintf(buf, "0x%08x", readl(ISWGRP_HANDOFF_FPGA2SDR));
-#else
-	sprintf(buf, "0x%08x", 0x111);
-#endif
-	setenv("fpga2sdram_handoff", buf);
+
+	if(!getenv("fpga2sdram_handoff")){
+		sprintf(buf, "0x%08x", 0x111);
+		setenv("fpga2sdram_handoff", buf);
+	}
+
 	setenv_addr("fpga2sdram_apply", (void *)sdram_applycfg_uboot);
 
 	/* axi bridges (hps2fpga, lwhps2fpga and fpga2hps) */
 	setenv_addr("axibridge", (void *)&reset_manager_base->brg_mod_reset);
-#ifndef CONFIG_LARK_BOARD
-	sprintf(buf, "0x%08x", readl(ISWGRP_HANDOFF_AXIBRIDGE));
-#else
-	sprintf(buf, "0x%08x", 0x0);
-#endif
-	setenv("axibridge_handoff", buf);
+
+
+	if(!getenv("axibridge_handoff")){
+		sprintf(buf, "0x%08x", 0x0);
+		setenv("axibridge_handoff", buf);
+	}
 
 	/* l3 remap register */
 	setenv_addr("l3remap", (void *)SOCFPGA_L3REGS_ADDRESS);
-#ifndef CONFIG_LARK_BOARD
-	sprintf(buf, "0x%08x", readl(ISWGRP_HANDOFF_L3REMAP));
-#else
-	sprintf(buf, "0x%08x", 0x19);
-#endif
-	setenv("l3remap_handoff", buf);
 
+	if(!getenv("l3remap_handoff")){
+		sprintf(buf, "0x%08x", 0x19);
+		setenv("l3remap_handoff", buf);
+	}
 
 	/* add signle command to enable all bridges based on handoff */
 	setenv("bridge_enable_handoff",

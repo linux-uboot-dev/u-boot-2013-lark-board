@@ -227,10 +227,10 @@
 	"fpga=0\0" \
 	"fpgadata=0x2000000\0" \
 	"fpgadatasize=0x700000\0" \
-	"fpgaload=fatload mmc 0:1 ${fpgadata} ${pcie_rbf};" \
-	 "fpga load 0 ${fpgadata} ${pcie_rbf_size}\0" \
-	 "pcie_rbf=vga.rbf\0" \
-	 "pcie_rbf_size=0x6aebd0\0" \
+	"fpgaload=fatload mmc 0:1 ${fpgadata} ${fpga_rbf};" \
+	 "fpga load 0 ${fpgadata} ${fpga_rbf_size}\0" \
+	 "fpga_rbf=soc_system.rbf\0" \
+	 "fpga_rbf_size=0x6aebd0\0" \
 	"ramdiskimage=ramdisk.gz.uboot\0" \
 	"ramdiskaddr=0x4000000\0" \
 	"ramload=fatload mmc 0:1 ${loadaddr} ${bootimage};" \
