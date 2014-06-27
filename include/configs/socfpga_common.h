@@ -205,11 +205,12 @@
 	"nandfdtaddr=0xA0000\0" \
 	"nandroot=/dev/mtdblock1\0" \
 	"nandrootfstype=jffs2\0" \
+	"dispmode=VGA\0"\
 	"mmcload=mmc rescan;" \
 		"${mmcloadcmd} mmc 0:${mmcloadpart} ${loadaddr} ${bootimage};" \
 		"${mmcloadcmd} mmc 0:${mmcloadpart} ${fdtaddr} ${fdtimage}\0" \
 	"mmcboot=setenv bootargs " CONFIG_BOOTARGS \
-		" root=${mmcroot} rw rootwait;" \
+		" root=${mmcroot} rw rootwait fbmode=${dispmode};" \
 		"bootz ${loadaddr} - ${fdtaddr}\0" \
 	"netboot=dhcp ${bootimage} ; " \
 		"tftp ${fdtaddr} ${fdtimage} ; run ramboot\0" \
