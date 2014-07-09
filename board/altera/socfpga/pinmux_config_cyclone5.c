@@ -64,7 +64,11 @@ unsigned long sys_mgr_init_table[CONFIG_HPS_PINMUX_NUM] = {
 	3, /* GENERALIO11 - SPIM0 */
 	3, /* GENERALIO12 - SPIM0 */
 	2, /* GENERALIO13 - CAN0 */
+#ifndef CONFIG_LARK_BOARD
 	2, /* GENERALIO14 - CAN0 */
+#else
+	0, /* GENERALIO14 - GPIO */
+#endif
 
 #ifndef CONFIG_LARK_BOARD
 	3, /* GENERALIO15 - I2C0 */
