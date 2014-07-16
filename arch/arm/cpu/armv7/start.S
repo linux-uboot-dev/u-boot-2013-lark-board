@@ -134,7 +134,7 @@ IRQ_STACK_START_IN:
  */
 
 reset:
-@	bl	save_boot_params
+	bl	save_boot_params
 	/*
 	 * set the cpu to SVC32 mode
 	 */

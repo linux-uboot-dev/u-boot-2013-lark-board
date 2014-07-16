@@ -38,6 +38,9 @@
 #include <asm/arch/system_manager.h>
 #include <spi_flash.h>
 #include <asm/arch/fpga_manager.h>
+#include <fat.h>
+#include <fs.h>
+#include <mmc.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -189,6 +192,121 @@ void spl_program_fpga_qspi(void)
 }
 #endif
 
+#if defined(CONFIG_SPL_FPGA_LOAD) && defined(CONFIG_SPL_MMC_SUPPORT)
+/* program FPGA where rbf file is located at FAT partition with SD */
+void spl_program_fpga_sd_fat(void)
+{
+	u32 filesize, status;
+	const u32 temp_sdram = 0x2000000;
+	struct mmc *mmc;
+
+	/* initialize the MMC controller */
+	mmc_initialize(gd->bd);
+
+	/* We register only one device. So, the dev id is always 0 */
+	mmc = find_mmc_device(0);
+	if (!mmc) {
+		puts("spl: mmc device not found!!\n");
+		hang();
+	}
+
+#ifdef CONFIG_HW_WATCHDOG
+	WATCHDOG_RESET();
+#endif
+
+	status = mmc_init(mmc);
+	if (status) {
+		printf("spl: mmc init failed: err - %d\n", status);
+		hang();
+	}
+
+	status = fat_register_device(&mmc->block_dev,
+				CONFIG_SYS_MMC_SD_FAT_BOOT_PARTITION);
+	if (status) {
+		printf("spl: fat register err - %d\n", status);
+		hang();
+	}
+
+#ifdef CONFIG_HW_WATCHDOG
+	WATCHDOG_RESET();
+#endif
+
+	/* do memory padding as data in SDRAM */
+	filesize = file_fat_read(CONFIG_SPL_FPGA_FAT_NAME, NULL, 0);
+	if (filesize != -1) {
+		memset((unsigned char *)((temp_sdram + filesize)
+			& ~(CONFIG_SPL_SDRAM_ECC_PADDING - 1)),
+			0, CONFIG_SPL_SDRAM_ECC_PADDING);
+	}
+
+#ifdef CONFIG_HW_WATCHDOG
+	WATCHDOG_RESET();
+#endif
+
+	filesize = file_fat_read(CONFIG_SPL_FPGA_FAT_NAME,
+					(u8 *)temp_sdram, 0);
+	if (filesize == -1) {
+		printf("Error - " CONFIG_SPL_FPGA_FAT_NAME
+			" not found within SDMMC FAT parition\n");
+		hang();
+	}
+
+#ifdef CONFIG_HW_WATCHDOG
+	WATCHDOG_RESET();
+#endif
+	/* initialize the FPGA Manager */
+	status = fpgamgr_program_init();
+	if (status) {
+		printf("FPGA: Init failed with error code %d\n", status);
+		hang();
+	}
+
+#ifdef CONFIG_HW_WATCHDOG
+	WATCHDOG_RESET();
+#endif
+	/* transfer data to FPGA Manager */
+	fpgamgr_program_write((const long unsigned int *)temp_sdram, filesize);
+
+#ifdef CONFIG_HW_WATCHDOG
+	WATCHDOG_RESET();
+#endif
+
+	/* Ensure the FPGA entering config done */
+	status = fpgamgr_program_poll_cd();
+	if (status) {
+		printf("FPGA: Poll CD failed with error code %d\n", status);
+		hang();
+	}
+
+#ifdef CONFIG_HW_WATCHDOG
+	WATCHDOG_RESET();
+#endif
+
+	/* Ensure the FPGA entering init phase */
+	status = fpgamgr_program_poll_initphase();
+	if (status) {
+		printf("FPGA: Poll initphase failed with error code %d\n",
+			status);
+		hang();
+	}
+#ifdef CONFIG_HW_WATCHDOG
+	WATCHDOG_RESET();
+#endif
+
+	/* Ensure the FPGA entering user mode */
+	status = fpgamgr_program_poll_usermode();
+	if (status) {
+		printf("FPGA: Poll usermode failed with error code %d\n",
+			status);
+		hang();
+	}
+#ifdef CONFIG_HW_WATCHDOG
+	WATCHDOG_RESET();
+#endif
+	free(mmc);
+}
+#endif
+
 /*
  * Board initialization after bss clearance
  */
@@ -210,7 +328,7 @@ void spl_board_init(void)
 			CONFIG_HPS_MAINPLLGRP_DBGATCLK_CNT),
 		CLKMGR_MAINPLLGRP_MAINQSPICLK_CNT_SET(
 			CONFIG_HPS_MAINPLLGRP_MAINQSPICLK_CNT),
-		CLKMGR_PERPLLGRP_PERNANDSDMMCCLK_CNT_SET(
+		CLKMGR_MAINPLLGRP_PERNANDSDMMCCLK_CNT_SET(
 			CONFIG_HPS_MAINPLLGRP_MAINNANDSDMMCCLK_CNT),
 		CLKMGR_MAINPLLGRP_CFGS2FUSER0CLK_CNT_SET(
 			CONFIG_HPS_MAINPLLGRP_CFGS2FUSER0CLK_CNT),
@@ -336,9 +454,14 @@ void spl_board_init(void)
 	WATCHDOG_RESET();
 #endif
 	DEBUG_MEMORY
+	debug("RAM boot setup if CSEL 0\n");
+	ram_boot_setup();
+
 	debug("Reconfigure Clock Manager\n");
 	/* reconfigure the PLLs */
 	cm_basic_init(&cm_default_cfg);
+	/* calculate the clock frequencies required for drivers */
+	cm_derive_clocks_for_drivers();
 
 #ifdef CONFIG_HW_WATCHDOG
 	WATCHDOG_RESET();
@@ -411,6 +534,12 @@ void spl_board_init(void)
 #endif /* CONFIG_PRELOADER_WARMRST_SKIP_CFGIO */
 #endif /* CONFIG_SOCFPGA_VIRTUAL_TARGET */
 
+	/*
+	 * If SDMMC PWREN is used, we need to ensure BootROM always reconfigure
+	 * IOCSR and pinmux after warm reset. This is to cater the use case
+	 * of board design which is using SDMMC PWREN pins.
+	 */
+	sysmgr_sdmmc_pweren_mux_check();
 
 #ifdef CONFIG_HW_WATCHDOG
 	WATCHDOG_RESET();
@@ -423,10 +552,7 @@ void spl_board_init(void)
 #else
 	reset_deassert_all_peripherals();
 #endif
-#if (CONFIG_PRELOADER_EXE_ON_FPGA == 0)
 	reset_deassert_bridges_handoff();
-#endif
-
 
 #ifndef CONFIG_SOCFPGA_VIRTUAL_TARGET
 #ifdef CONFIG_HW_WATCHDOG
@@ -455,6 +581,9 @@ void spl_board_init(void)
 	preloader_console_init();
 	/* printout to know the board configuration during run time */
 	checkboard();
+
+	/* printout the clock info */
+	cm_print_clock_quick_summary();
 #endif
 
 #ifdef CONFIG_HW_WATCHDOG
@@ -510,6 +639,19 @@ void spl_board_init(void)
 	if (hps_emif_diag_test(SDRAM_TEST_FAST, 0, sdram_size) == 0)
 		hang();
 #endif /* CONFIG_PRELOADER_HARDWARE_DIAGNOSTIC */
+
+#if (CONFIG_PRELOADER_SDRAM_SCRUBBING == 1)
+	/* scrub the boot region before copying happen */
+	sdram_scrub_boot_region();
+#if (CONFIG_PRELOADER_SDRAM_SCRUB_REMAIN_REGION == 1)
+	/*
+	 * Trigger DMA to scrub remain region so it can run parallel
+	 * with flash loading to minimize the scrubbing time penalty
+	 */
+	sdram_scrub_remain_region_trigger();
+#endif /* CONFIG_PRELOADER_SDRAM_SCRUB_REMAIN_REGION */
+#endif /* CONFIG_PRELOADER_SDRAM_SCRUBBING */
+
 #endif	/* CONFIG_PRELOADER_SKIP_SDRAM */
 
 #ifdef CONFIG_HW_WATCHDOG
@@ -604,8 +746,7 @@ void spl_board_init(void)
 	spl_program_fpga_qspi();
 #elif defined(CONFIG_SPL_MMC_SUPPORT)
 	/* rbf file located within SDMMC */
-#error Preloader FPGA programming support temporarily not supporting RBF file \
-stored within SDMMC card. Please use Quad SPI boot option for this moment.
+	spl_program_fpga_sd_fat();
 #endif
 
 	/* enable signals from hps peripheral controller to fpga
@@ -613,10 +754,10 @@ stored within SDMMC card. Please use Quad SPI boot option for this moment.
 	writel(readl(ISWGRP_HANDOFF_FPGAINTF), SYSMGR_FPGAINTF_MODULE);
 
 	/* enable signals from fpga to hps sdram (based on handoff) */
-	writel(readl(ISWGRP_HANDOFF_FPGA2SDR),
-		(SOCFPGA_SDR_ADDRESS + SDR_CTRLGRP_FPGAPORTRST_ADDRESS));
 	setbits_le32((SOCFPGA_SDR_ADDRESS + SDR_CTRLGRP_STATICCFG_ADDRESS),
 		SDR_CTRLGRP_STATICCFG_APPLYCFG_MASK);
+	writel(readl(ISWGRP_HANDOFF_FPGA2SDR),
+		(SOCFPGA_SDR_ADDRESS + SDR_CTRLGRP_FPGAPORTRST_ADDRESS));
 
 	/* enable the axi bridges if FPGA programmed */
 	writel(readl(ISWGRP_HANDOFF_AXIBRIDGE),
