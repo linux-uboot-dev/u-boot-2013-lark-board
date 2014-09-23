@@ -237,5 +237,5 @@ unsigned long sys_mgr_init_table[CONFIG_HPS_PINMUX_NUM] = {
 	0, /* I2C1USEFPGA */
 	0, /* SPIM1USEFPGA */
 	0, /* USB0USEFPGA */
-	0 /* SPIM0USEFPGA */
+	1 /* SPIM0USEFPGA */
 };
